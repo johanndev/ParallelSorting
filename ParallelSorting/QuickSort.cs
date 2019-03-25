@@ -1,61 +1,84 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace ParallelSorting
 {
-    public class QuickSort
+    public class QuickSort<T> where T : IComparable<T>
     {
-        public static int[] Sort(ref int[] array)
+        public static T[] RunSequential<T>(T[] array)
+            where T : IComparable<T>
         {
-            runQuickSort(0, array.Length - 1, ref array);
+            return InternalSequential(array, 0, array.Length - 1);
+        }
+
+        public static T[] RunParallel<T>(T[] array)
+            where T : IComparable<T>
+        {
+            return InternalParallel(array, 0, array.Length - 1);
+        }
+
+        private static T[] InternalSequential<T>(T[] array, int left, int right)
+            where T : IComparable<T>
+        {
+            if (left >= right)
+            {
+                return array;
+            }
+
+            SwapElements(array, left, (left + right) / 2);
+            int last = left;
+            for (int current = left + 1; current <= right; current++)
+            {
+                if (array[current].CompareTo(array[left]) < 0)
+                {
+                    last++;
+                    SwapElements(array, last, current);
+                }
+            }
+
+            SwapElements(array, left, last);
+
+            InternalSequential(array, left, last - 1);
+            InternalSequential(array, last + 1, right);
 
             return array;
         }
 
-        private static void runQuickSort(int left, int right, ref int[] array)
+        private static T[] InternalParallel<T>(T[] array, int left, int right)
+            where T : IComparable<T>
         {
-            if (left < right)
+            if (left >= right)
             {
-                int divider = divide(left, right, ref array);
-                runQuickSort(left, divider - 1, ref array);
-                runQuickSort(divider + 1, right, ref array);
+                return array;
             }
+
+            SwapElements(array, left, (left + right) / 2);
+            int last = left;
+            for (int current = left + 1; current <= right; current++)
+            {
+                if (array[current].CompareTo(array[left]) < 0)
+                {
+                    last++;
+                    SwapElements(array, last, current);
+                }
+            }
+
+            SwapElements(array, left, last);
+
+            Parallel.Invoke(
+                () => InternalParallel(array, left, last - 1),
+                () => InternalParallel(array, last + 1, right)
+            );
+
+            return array;
         }
 
-        private static int divide(int left, int right, ref int[] array)
+        private static void SwapElements<T>(T[] array, int left, int right)
+            where T : IComparable<T>
         {
-            int i = left;
-            int j = right - 1;
-            int pivot = array[right];
-
-            do
-            {
-                while (array[i] <= pivot && i < right)
-                {
-                    i += 1;
-                }
-
-                while (array[j] >= pivot && j > left)
-                {
-                    j -= 1;
-                }
-
-                if (i < j)
-                {
-                    int z = array[i];
-                    array[i] = array[j];
-                    array[j] = z;
-                }
-            } while (i < j);
-
-            if (array[i] > pivot)
-            {
-                int z = array[i];
-                array[i] = array[right];
-                array[right] = z;
-            }
-            return i;
+            T temp = array[left];
+            array[left] = array[right];
+            array[right] = temp;
         }
     }
 }

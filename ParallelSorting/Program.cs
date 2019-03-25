@@ -1,7 +1,11 @@
 ﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Mathematics;
 using BenchmarkDotNet.Running;
 using System;
+using System.IO;
+using System.Linq;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace ParallelSorting
 {
@@ -9,16 +13,27 @@ namespace ParallelSorting
     {
         static void Main(string[] args)
         {
-            var mergeSortSummary = BenchmarkRunner.Run<SortBenchmarkHarness>();
-        }
+            var testArray = TestData.GetTestArray();
 
+            var fileName = "TestArray.bin";
+            var filePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            using (var stream = File.Open(filePath, FileMode.Create))
+            {
+                var binF = new BinaryFormatter();
+                binF.Serialize(stream, testArray);
+            }
+
+            //BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, new DebugInProcessConfig());
+            var summary = BenchmarkRunner.Run<SortBenchmarkHarness>();
+        }
     }
 
-    public static class TestData
+    public class TestData
     {
         public static int[] GetTestArray()
         {
-            int n = 100;
+            var n = 2_000_000;
             int min = 0;
             int max = 1_000_000;
             var result = new int[n];
@@ -33,42 +48,67 @@ namespace ParallelSorting
         }
     }
 
-    [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
+    [RankColumn(NumeralSystem.Stars)]
+    [RankColumn(NumeralSystem.Roman)]
     public class SortBenchmarkHarness
     {
+        private string fileName = $"TestArray.bin";
+        private int[] orgArray;
         private int[] startArray;
-        public SortBenchmarkHarness()
+
+        [GlobalSetup]
+        public void GlobalSetup()
         {
-            startArray = TestData.GetTestArray();
+            int[] importedArray;
+
+            var filePath = Path.Combine(Path.GetTempPath(), fileName);
+
+            using (var stream = File.Open(filePath, FileMode.Open))
+            {
+                var binF = new BinaryFormatter();
+                importedArray = (int[])binF.Deserialize(stream);
+            }
+
+            orgArray = new int[importedArray.Length];
+            importedArray.AsSpan().CopyTo(orgArray.AsSpan());
         }
 
-        [Benchmark(Baseline = true), BenchmarkCategory(nameof(MergeSort))]
-        public void RunMergeSort()
+        [IterationSetup]
+        public void IterationSetup()
         {
-            var orgArray = startArray;
-            MergeSort.Sort(ref orgArray);
+            startArray = new int[orgArray.Length];
+            orgArray.AsSpan().CopyTo(startArray.AsSpan());
         }
 
-        [Benchmark, BenchmarkCategory(nameof(MergeSort))]
-        public void RunMergeSortParallel()
+        [BenchmarkCategory("MergeSort"), Benchmark()]
+        public void MergeSort()
         {
-            var orgArray = startArray;
-            MergeSort.Sort(ref orgArray);
+            MergeSort<int>.RunSequential(startArray);
         }
 
-        [Benchmark(Baseline = true), BenchmarkCategory(nameof(QuickSort))]
-        public void RunQuickSort()
+        [Benchmark, BenchmarkCategory("MergeSort")]
+        public void MergeSortParallel()
         {
-            var orgArray = startArray;
-            QuickSort.Sort(ref orgArray);
+            MergeSort<int>.RunParallel(startArray);
         }
 
-        [Benchmark, BenchmarkCategory(nameof(QuickSort))]
-        public void RunQuickSortParallel()
+        [BenchmarkCategory("QuickSort"), Benchmark()]
+        public void QuickSort()
         {
-            var orgArray = startArray;
-            QuickSort.Sort(ref orgArray);
+            QuickSort<int>.RunSequential(startArray);
+        }
+
+        [Benchmark, BenchmarkCategory("QuickSort")]
+        public void QuickSortParallel()
+        {
+            QuickSort<int>.RunParallel(startArray);
+        }
+
+        [BenchmarkCategory("BaseLine"), Benchmark(Baseline = true)]
+        public void ArraySort()
+        {
+            Array.Sort(startArray);
         }
     }
 }

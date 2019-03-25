@@ -1,75 +1,86 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace ParallelSorting
 {
-    public class MergeSort
+    public class MergeSort<T> where T : IComparable<T>
     {
-        public static int[] Sort(ref int[] array)
+        public static T[] RunSequential(T[] array)
         {
-            if (array.Length > 1)
+            return RunSequentialInternal(array, 0, array.Length - 1);
+        }
+        private static T[] RunSequentialInternal(T[] array, int start, int end)
+        {
+            if (start >= end)
             {
-                var mid = array.Length / 2;
-
-                var left = new int[mid];
-                for (int i = 0; i <= left.Length - 1; i++)
-                {
-                    left[i] = array[i];
-                }
-
-                var right = new int[array.Length - mid];
-                for (int i = mid; i <= array.Length - 1; i++)
-                {
-                    right[i - mid] = array[i];
-                }
-
-                Sort(ref left);
-                Sort(ref right);
-
-                array = Merge(ref left, ref right);
+                return new T[] { array[start] };
             }
 
-            return array;
+            var mid = (end + start) / 2;
+            T[] left = RunSequentialInternal(array, start, mid);
+            T[] right = RunSequentialInternal(array, mid + 1, end);
+            var resultArr = Merge(left, right);
+
+            return resultArr;
         }
 
-        private static int[] Merge(ref int[] left, ref int[] right)
+        public static T[] RunParallel(T[] array)
         {
-            var newArray = new int[left.Length + right.Length];
-            int indexLeft = 0;
-            int indexRight = 0;
-            int indexResult = 0;
+            return RunParallelInternal(array, 0, array.Length - 1);
+        }
 
-            while (indexLeft < left.Length && indexRight < right.Length)
+        private static T[] RunParallelInternal(T[] array, int start, int end)
+        {
+            if (start >= end)
             {
-                if (left[indexLeft] < right[indexRight])
+                return new T[] { array[start] };
+            }
+
+            var mid = (end + start) / 2;
+            var left = new T[mid];
+            var right = new T[array.Length - mid];
+
+            Parallel.Invoke(
+                () => left = RunSequentialInternal(array, start, mid),
+                () => right = RunSequentialInternal(array, mid + 1, end)
+            );
+            var resultArr = Merge(left, right);
+
+            return resultArr;
+        }
+
+        private static T[] Merge<T>(T[] left, T[] right)
+            where T : IComparable<T>
+        {
+            var mergedArr = new T[left.Length + right.Length];
+
+            int leftIndex = 0;
+            int rightIndex = 0;
+            int mergedIndex = 0;
+
+            while (leftIndex < left.Length && rightIndex < right.Length)
+            {
+                if (left[leftIndex].CompareTo(right[rightIndex]) < 0)
                 {
-                    newArray[indexResult] = left[indexLeft];
-                    indexLeft += 1;
+                    mergedArr[mergedIndex++] = left[leftIndex++];
                 }
                 else
                 {
-                    newArray[indexResult] = right[indexRight];
-                    indexRight += 1;
+                    mergedArr[mergedIndex++] = right[rightIndex++];
                 }
-                indexResult += 1;
             }
 
-            while (indexLeft < left.Length)
+            while (leftIndex < left.Length)
             {
-                newArray[indexResult] = left[indexLeft];
-                indexLeft += 1;
-                indexResult += 1;
+                mergedArr[mergedIndex++] = left[leftIndex++];
             }
 
-            while (indexRight < right.Length)
+            while (rightIndex < right.Length)
             {
-                newArray[indexResult] = right[indexRight];
-                indexRight += 1;
-                indexResult += 1;
+                mergedArr[mergedIndex++] = right[rightIndex++];
             }
 
-            return newArray;
+            return mergedArr;
         }
     }
 }
